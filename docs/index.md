@@ -5,9 +5,9 @@ Run JupyterLab directly in your browser with the DataX.now workspace.
 ## Open the workspace
 
 - [Launch DataX.now](https://datax.now) — the fastest option. Some company networks
-	may block it.
-- [Open the Read the Docs JupyterLab build](_static/lab/index.html) — a more
-	broadly accessible alternative.
+  may block it.
+- <a href="_static/lab/index.html">Open the Read the Docs JupyterLab build</a> — a
+  more broadly accessible alternative.
 
 ## About this site
 
