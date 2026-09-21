@@ -1,9 +1,19 @@
-# JupyterLite
+# DataX.now
 
-The browser application is available at <a href="_static/lab/index.html">Open JupyterLab</a>.
+Run JupyterLab directly in your browser with the DataX.now workspace.
 
-Notebook files are available from the <a href="_static/tree/index.html">JupyterLite file browser</a>.
+## Open the workspace
 
-This documentation page is the Read the Docs shell around the generated static
-JupyterLite site. Edit the files in `notebooks/` and the JSON configuration at
-the repository root to customize the deployment.
+- [Launch DataX.now](https://datax.now) — the fastest option. Some company networks
+	may block it.
+- [Open the Read the Docs JupyterLab build](_static/lab/index.html) — a more
+	broadly accessible alternative.
+
+## About this site
+
+This page is the Read the Docs front page for the generated JupyterLite site.
+The application runs entirely in the browser, with no separate application
+server required.
+
+To customize the workspace, add notebooks and data files to `notebooks/` or
+update the JSON configuration files at the repository root.
