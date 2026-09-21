@@ -42,6 +42,15 @@ The static result is written to `dist/`. A local server must provide the
 cross-origin isolation headers required by the WebAssembly runtime; RTD is the
 supported hosted deployment for this repository.
 
+## Vercel deployment
+
+Vercel can build the same static JupyterLite site using the checked-in
+`vercel.json` configuration. It runs `./build.sh`, publishes `dist/`, and
+applies the cross-origin isolation headers required by the WebAssembly runtime.
+The `.vercelignore` file excludes local environments and generated output while
+keeping the wheel, conda, runtime-wheel, and notebook inputs available to the
+build.
+
 ## Repository layout
 
 | Path | Purpose |
