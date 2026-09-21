@@ -51,6 +51,24 @@ The `.vercelignore` file excludes local environments and generated output while
 keeping the wheel, conda, runtime-wheel, and notebook inputs available to the
 build.
 
+## GitHub Pages deployment
+
+The `.github/workflows/deploy-github-pages.yml` workflow builds and publishes
+the complete `dist/` directory to GitHub Pages when `master` changes. It can
+also be started manually with **Run workflow**. In the repository settings,
+set **Pages > Build and deployment > Source** to **GitHub Actions**.
+
+The workflow also places a ZIP of the complete deployment at the site root:
+
+```text
+https://<owner>.github.io/<repository>/jupyterlite-deployment.zip
+```
+
+The exact Pages URL and ZIP URL are printed in the deployment job summary after
+each successful run. GitHub Pages does not support the custom COOP/COEP response
+headers used by `vercel.json`; use the Read the Docs or Vercel deployment when
+the WebAssembly runtime requires cross-origin isolation.
+
 ## Repository layout
 
 | Path | Purpose |
