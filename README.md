@@ -77,13 +77,15 @@ set **Pages > Build and deployment > Source** to **GitHub Actions**.
 The workflow also places a ZIP of the complete deployment at the site root:
 
 ```text
-https://<owner>.github.io/<repository>/jupyterlite-deployment.zip
+https://<owner>.github.io/<repository>/datax-now.zip
 ```
 
 The exact Pages URL and ZIP URL are printed in the deployment job summary after
-each successful run. GitHub Pages does not support the custom COOP/COEP response
-headers used by `vercel.json`; use the Read the Docs or Vercel deployment when
-the WebAssembly runtime requires cross-origin isolation.
+each successful run. Vercel publishes the same archive at `/datax-now.zip`, and
+Read the Docs publishes it at `/_static/datax-now.zip`. GitHub Pages does not
+support the custom COOP/COEP response headers used by `vercel.json`; use the
+Read the Docs or Vercel deployment when the WebAssembly runtime requires
+cross-origin isolation.
 
 ## Repository layout
 

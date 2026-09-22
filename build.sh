@@ -3495,6 +3495,31 @@ if [ "$VERIFY_FAIL" -ne 0 ]; then
   exit 1
 fi
 
+  # Include the local CORS server and package the complete deployment for static
+  # hosts that publish the dist/ directory directly.
+  cp "$REPO_ROOT/cors_server.py" "dist/cors_server.py"
+  python3 <<'EOFPACKAGE'
+  from pathlib import Path
+  import tempfile
+  import zipfile
+
+  dist = Path("dist")
+  archive = dist / "datax-now.zip"
+
+  with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as temporary:
+    temporary_path = Path(temporary.name)
+
+  try:
+    with zipfile.ZipFile(temporary_path, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+      for path in sorted(dist.rglob("*")):
+        if path.is_file() and path != archive:
+          bundle.write(path, path.relative_to(dist))
+    temporary_path.replace(archive)
+  finally:
+    temporary_path.unlink(missing_ok=True)
+  EOFPACKAGE
+  echo "  ✓ Wrote dist/datax-now.zip"
+
 echo ""
 echo "=========================================="
 echo "✓ DEPLOYMENT PROCESS COMPLETED"

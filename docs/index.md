@@ -8,6 +8,7 @@ Run JupyterLab directly in your browser with the DataX.now workspace.
   may block it.
 - <a href="_static/lab/index.html">Open the Read the Docs JupyterLab build</a> — a
   more broadly accessible alternative.
+- <a href="_static/datax-now.zip">Download the DataX.now deployment</a>.
 
 ## About this site
 

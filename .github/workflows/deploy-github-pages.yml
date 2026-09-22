@@ -27,11 +27,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          archive_path="$RUNNER_TEMP/jupyterlite-deployment.zip"
-          touch dist/.nojekyll
-          (cd dist && zip -q -r "$archive_path" .)
-          cp "$archive_path" dist/jupyterlite-deployment.zip
-          test -s dist/jupyterlite-deployment.zip
+          test -s dist/datax-now.zip
+          test -f dist/cors_server.py
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
@@ -60,10 +57,10 @@ jobs:
           page_url="${{ steps.deployment.outputs.page_url }}"
           page_url="${page_url%/}/"
           echo "JupyterLite: ${page_url}"
-          echo "ZIP: ${page_url}jupyterlite-deployment.zip"
+          echo "ZIP: ${page_url}datax-now.zip"
           {
             echo "## JupyterLite deployment"
             echo
             echo "- Site: ${page_url}"
-            echo "- ZIP: ${page_url}jupyterlite-deployment.zip"
+            echo "- ZIP: ${page_url}datax-now.zip"
           } >> "$GITHUB_STEP_SUMMARY"
