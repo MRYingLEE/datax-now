@@ -8,7 +8,10 @@ Run JupyterLab directly in your browser with the DataX.now workspace.
   may block it.
 - <a href="_static/lab/index.html">Open the Read the Docs JupyterLab build</a> — a
   more broadly accessible alternative.
-- <a href="_static/datax-now.zip">Download the DataX.now deployment</a>.
+- <a href="_static/datax-now.zip">Download the local DataX.now deployment</a> — for faster access, use <a href="https://datax.now">datax.now</a> instead.
+
+After extracting the download, run `python cors_server.py` from the unzipped
+folder to start a local instance of DataX.now.
 
 ## About this site
 
