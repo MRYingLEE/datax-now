@@ -3506,13 +3506,15 @@ import zipfile
 dist = Path("dist")
 archive = dist / "datax-now.zip"
 
-with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as temporary:
+with tempfile.NamedTemporaryFile(
+  dir=dist, prefix=".datax-now-", suffix=".zip", delete=False
+) as temporary:
   temporary_path = Path(temporary.name)
 
 try:
   with zipfile.ZipFile(temporary_path, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
     for path in sorted(dist.rglob("*")):
-      if path.is_file() and path != archive:
+      if path.is_file() and path not in {archive, temporary_path}:
         bundle.write(path, path.relative_to(dist))
   temporary_path.replace(archive)
 finally:
