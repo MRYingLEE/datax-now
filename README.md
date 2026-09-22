@@ -51,6 +51,22 @@ The `.vercelignore` file excludes local environments and generated output while
 keeping the wheel, conda, runtime-wheel, and notebook inputs available to the
 build.
 
+The Vercel project `datax-now-readthedocs` uses staged production deployments:
+automatic custom-domain assignment is disabled (`autoAssignCustomDomains: false`).
+Builds from the production branch are available at deployment-specific URLs for
+review, while the production domain remains on the previously promoted build.
+After checking a staged deployment, promote that exact deployment without a
+rebuild:
+
+```bash
+vercel promote <reviewed-deployment-url>
+```
+
+For a manually initiated build, stage it explicitly with
+`vercel --prod --skip-domain` before reviewing and promoting it. The production
+domain `datax.now` is assigned to this project; do not use the production domain
+to test an unpromoted deployment.
+
 ## GitHub Pages deployment
 
 The `.github/workflows/deploy-github-pages.yml` workflow builds and publishes
