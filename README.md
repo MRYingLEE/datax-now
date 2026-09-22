@@ -64,8 +64,8 @@ vercel promote <reviewed-deployment-url>
 
 For a manually initiated build, stage it explicitly with
 `vercel --prod --skip-domain` before reviewing and promoting it. The production
-domain `datax.now` is assigned to this project; do not use the production domain
-to test an unpromoted deployment.
+domains `datax.now` and `www.datax.now` are assigned to this project; do not use
+either production domain to test an unpromoted deployment.
 
 ## GitHub Pages deployment
 
