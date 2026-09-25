@@ -2763,11 +2763,33 @@ cache_name = f"precache-{digest}"
 
 updated = re.sub(r'const CACHE="precache(?:-[0-9a-f]+)?"', f'const CACHE="{cache_name}"', content, count=1)
 updated = re.sub(
-  r'function onActivate\(e\)\{const t=new URL\(location\.href\)\.searchParams;enableCache="true"===t\.get\("enableCache"\),e\.waitUntil\(self\.clients\.claim\(\)\)\}',
-  'function onActivate(e){const t=new URL(location.href).searchParams;enableCache="true"===t.get("enableCache"),e.waitUntil((async()=>{const e=await caches.keys();await Promise.all(e.filter(e=>e.startsWith("precache")&&e!==CACHE).map(e=>caches.delete(e)));await self.clients.claim()})())}',
+  r'function onActivate\(e\)\{(?:const t=new URL\(location\.href\)\.searchParams;enableCache="true"===t\.get\("enableCache"\)|enableCache="true"===new URL\(location\.href\)\.searchParams\.get\("enableCache"\)),e\.waitUntil\(self\.clients\.claim\(\)\)\}',
+  'function onActivate(e){e.waitUntil((async()=>{const names=await caches.keys();await Promise.all(names.filter(name=>name.startsWith("precache")&&name!==CACHE).map(name=>caches.delete(name)));await self.clients.claim()})())}',
   updated,
   count=1,
 )
+updated = updated.replace('let enableCache=!1', 'let enableCache="true"===new URL(location.href).searchParams.get("enableCache")')
+updated = updated.replace('caches.open("precache")', 'caches.open(CACHE)')
+updated = updated.replace(
+  'async function refetch(e){let a=await fetch(e);return await updateCache(e,a),a}',
+  'async function refetch(request){'
+  'const cached=await fromCache(request);'
+  'const headers=new Headers(request.headers);'
+  'const etag=cached&&cached.headers.get("ETag");'
+  'if(etag&&new URL(request.url).origin===location.origin)headers.set("If-None-Match",etag);'
+  'const response=await fetch(new Request(request,{headers}));'
+  'if(response.status===304&&cached)return cached;'
+  'if(response.ok)await updateCache(request,response.clone());'
+  'return response;}'
+)
+required = [
+  'let enableCache="true"===new URL(location.href).searchParams.get("enableCache")',
+  'caches.open(CACHE)',
+  'caches.keys()',
+  'headers.set("If-None-Match",etag)',
+]
+if not all(marker in updated for marker in required):
+  raise SystemExit("Service worker cache patch no longer matches the generated worker")
 
 if updated != content:
   sw_file.write_text(updated)

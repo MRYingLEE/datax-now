@@ -6,6 +6,7 @@ _output/
 bin/
 micromamba/
 .venv/
+.wrangler/
 __pycache__/
 *.pyc
 
@@ -24,3 +25,5 @@ temp/
 # Generated runtime package cache
 vendor/kernel-bundle/
 vendor/xeus-x-kernel/
+.vercel
+.env*

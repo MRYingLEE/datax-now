@@ -4,6 +4,7 @@
     "appName": "DataX.now",
     "defaultKernelName": "xpython",
     "exposeAppInBrowser": true,
+    "enableServiceWorkerCache": true,
     "xeusStartupProfile": "balanced",
     "xeusBackgroundWarm": "js",
     "xeusInitMainKernelWarm": "none",

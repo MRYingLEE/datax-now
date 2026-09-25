@@ -39,8 +39,30 @@ run. To reproduce the RTD build locally:
 ```
 
 The static result is written to `dist/`. A local server must provide the
-cross-origin isolation headers required by the WebAssembly runtime; RTD is the
-supported hosted deployment for this repository.
+cross-origin isolation headers required by the WebAssembly runtime; Read the
+Docs, Vercel, and Cloudflare deployments provide them.
+
+### Browser caching
+
+Service-worker caching is enabled in `jupyter-lite.json`. The build patches the
+worker to retain that setting across worker restarts, use its versioned cache,
+and send cached ETags when refreshing same-origin assets. Unchanged runtime
+files are reused locally while changed files are fetched in the background.
+The Cloudflare Worker also handles conditional requests with body-free `304`
+responses. Stable runtime URLs are not marked immutable.
+
+Run the focused regression checks with:
+
+```bash
+node --test scripts/service-worker-cache.test.mjs cloudflare/worker.test.mjs
+```
+
+After rebuilding and deploying, allow one initial load to populate the cache.
+With DevTools **Disable cache** unchecked, refresh and inspect **Transferred**,
+not the decoded resource size: unchanged runtime assets should come from the
+service worker or revalidate with `304`, without another full body download.
+Cache eviction, cleared site data, and private browsing can require downloads
+again. PWA installation alone does not guarantee offline availability.
 
 ## Vercel deployment
 
@@ -84,8 +106,35 @@ The exact Pages URL and ZIP URL are printed in the deployment job summary after
 each successful run. Vercel publishes the same archive at `/datax-now.zip`, and
 Read the Docs publishes it at `/_static/datax-now.zip`. GitHub Pages does not
 support the custom COOP/COEP response headers used by `vercel.json`; use the
-Read the Docs or Vercel deployment when the WebAssembly runtime requires
-cross-origin isolation.
+Read the Docs, Vercel, or Cloudflare deployment when the WebAssembly runtime
+requires cross-origin isolation.
+
+## Cloudflare deployment
+
+Cloudflare Pages cannot host the complete build: `dist/datax-now.zip` and some
+WebAssembly runtime files exceed its 25 MiB per-asset limit. Instead, the
+`deploy-cloudflare.yml` workflow uploads `dist/` to an R2 bucket and deploys a
+Worker that serves it at the same paths, including `/datax-now.zip`. The Worker
+adds the COOP/COEP headers required by the browser runtime.
+
+1. Create an R2 bucket named `datax-now` in your Cloudflare account.
+2. Create an R2 API token with object read/write access to that bucket. Store
+  its access key ID and secret access key as GitHub Actions secrets
+  `CLOUDFLARE_R2_ACCESS_KEY_ID` and `CLOUDFLARE_R2_SECRET_ACCESS_KEY`.
+3. Create a Cloudflare API token with Workers Scripts edit and R2 bucket read
+  permissions. Store it as `CLOUDFLARE_API_TOKEN`, and store the account ID as
+  `CLOUDFLARE_ACCOUNT_ID`.
+4. Run **Deploy JupyterLite to Cloudflare** from **Actions > Run workflow**.
+  Open the deployed Worker URL reported by Wrangler (or attach a domain to the
+  Worker in Cloudflare) and check `/lab/` and `/datax-now.zip`.
+
+Deployment is manual so an unreviewed build cannot replace the live Worker.
+The R2 bucket is not public: the Worker reads it through its bucket binding.
+Uploads synchronize and remove files no longer present in `dist/`; do not use
+the bucket for other content. Cloudflare R2 storage, operations, and Worker
+requests may incur charges.
+
+The live Worker is available at https://datax-now.helloway.workers.dev/.
 
 ## Repository layout
 
@@ -99,3 +148,4 @@ cross-origin isolation.
 | `environment-wasm-host.yml` | Browser kernel runtime packages |
 | `built-in-wheels/` | Checked-in Python wheels used by the build |
 | `built-in-conda/` | Checked-in WebAssembly conda packages |
+| `cloudflare/` | R2-backed Worker and Wrangler configuration |
