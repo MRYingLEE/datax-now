@@ -3193,7 +3193,7 @@ fi
 # Normalize empack metadata and write manifest
 # ==============================================================================
 echo "Normalizing empack metadata and writing built-in local manifest..."
-python3 << 'EOFPATCH'
+mamba_run_deploy python3 << 'EOFPATCH'
 import json
 from pathlib import Path
 
