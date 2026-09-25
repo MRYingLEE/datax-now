@@ -2594,9 +2594,8 @@ try_list_js = json.dumps(try_exts)
 # Behaviour:
 #   1. SW intercepts any fetch() for a blocked extension (e.g. a.so).
 #   2. It tries the canonical suffix first (a.so.asm).
-#   3. If the request fails (network error OR non-2xx HTTP status — both
-#      indicate a gateway block), it falls back to the next alias in order
-#      (a.so.zip, a.so.bin, …) until one succeeds.
+#   3. Only ordinary 403/404 responses try the next alias. Rate limits,
+#      challenges, server errors, and network/integrity failures do not retry.
 #   4. If every converted variant fails, it falls back to the original
 #      request so unconverted assets still work.
 #   5. The index of the first working suffix is cached in memory so all
@@ -2644,11 +2643,9 @@ patch_parts = [
     'return _origFetch(redirected,init).then(',
       'function(resp){',
         'if(resp.ok||resp.status===304){_workingIdx=idx;return resp;}',
-        # Non-2xx (e.g. 403 gateway block) → try next alias
+        'if(resp.headers.get("cf-mitigated")==="challenge"||(resp.status!==403&&resp.status!==404)){return resp;}',
         'return _tryFetch(baseUrl,idx+1,input,init);',
-      '},',
-      # Network error (connection refused / blocked) → try next alias
-      'function(){return _tryFetch(baseUrl,idx+1,input,init);}',
+      '}',
     ');',
   '}',
   'self.fetch=function(input,init){',

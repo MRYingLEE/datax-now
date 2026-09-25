@@ -155,7 +155,7 @@ test("fingerprints reuse runtime bodies after restart and invalidate binary-only
   }
 });
 
-test("runtime URL rewrites preserve validators and accept 304 without retrying", async () => {
+test("runtime URL rewrites preserve validators and do not amplify rate limits or challenges", async () => {
   const directory = mkdtempSync(join(tmpdir(), "datax-rewrite-"));
   try {
     mkdirSync(join(directory, "dist"));
@@ -167,13 +167,17 @@ test("runtime URL rewrites preserve validators and accept 304 without retrying",
       assert.equal(result.status, 0, result.stderr);
     }
     const requests = [];
+    let status = 304;
+    let headers = {};
+    let networkFailure = false;
     const context = vm.createContext({
       URL, Request,
       location: { href: "https://example.com/service-worker.js" },
       async fetch(input, init) {
         const request = new Request(input, init);
         requests.push(request);
-        return new Response(null, { status: 304 });
+        if (networkFailure) throw new TypeError("fetch failed");
+        return new Response(null, { status, headers });
       },
     });
     context.self = context;
@@ -200,6 +204,18 @@ test("runtime URL rewrites preserve validators and accept 304 without retrying",
       assert.equal(requests[0].cache, "no-cache");
       assert.equal(response.status, 304);
     }
+    for (const limitedStatus of [429, 503, 403]) {
+      status = limitedStatus;
+      headers = limitedStatus === 403 ? { "cf-mitigated": "challenge" } : { "Retry-After": "60" };
+      requests.length = 0;
+      const response = await context.fetch(new Request("https://example.com/xeus/library.so"));
+      assert.equal(response.status, limitedStatus);
+      assert.equal(requests.length, 1, "rate limits and challenges must not trigger alias retries");
+    }
+    networkFailure = true;
+    requests.length = 0;
+    await assert.rejects(context.fetch(new Request("https://example.com/xeus/library.so")), /fetch failed/);
+    assert.equal(requests.length, 1, "network or integrity failures must not trigger alias retries");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

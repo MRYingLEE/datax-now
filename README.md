@@ -75,6 +75,38 @@ service worker or revalidate with `304`, without another full body download.
 Cache eviction, cleared site data, and private browsing can require downloads
 again. PWA installation alone does not guarantee offline availability.
 
+### Read the Docs 429 responses
+
+`429 Too Many Requests (from service worker)` can be an upstream response
+forwarded by the worker. A direct check of the reported runtime URL returned
+`429` with `cf-mitigated: challenge`: Read the Docs' Cloudflare protection was
+serving a challenge instead of the runtime file. This is not HTTP 419.
+A background runtime fetch cannot complete an interactive HTML challenge.
+
+The build prevents alias retries for 429 responses, Cloudflare challenges,
+server errors, and network/integrity failures. Only ordinary 403/404 responses
+try alternate extensions. This avoids amplifying blocked requests; it does
+not remove the hosting provider's protection. Rebuild and redeploy to apply
+the change, then close all tabs for this site and reopen it so the updated
+service worker can take over.
+
+- Stop repeated reloads or simultaneous kernel starts while blocked. Wait for
+  `Retry-After` when supplied; otherwise allow a cooldown before trying again.
+- Open the documentation page normally and complete any challenge presented.
+  Keep browser caching enabled and avoid clearing site data as a routine fix:
+  doing so forces runtime downloads again.
+- If blocking persists, use the existing application deployment at
+  <https://datax.now/lab/> or <https://datax-now.helloway.workers.dev/lab/>.
+  Browser notebooks and storage are origin-specific, so export important work
+  before switching hosts; it will not appear there automatically.
+- Ask Read the Docs support to review the block, supplying the failing URL,
+  timestamp, HTTP status, and `cf-ray` response header. Do not share cookies.
+  There is no repository build setting that disables their Cloudflare challenge.
+
+Read the Docs documents its protection and automated-access guidance at
+<https://docs.readthedocs.com/platform/stable/automated-access.html>.
+Its API rate limits are separate from documentation asset hosting limits.
+
 ## Vercel deployment
 
 Vercel can build the same static JupyterLite site using the checked-in
