@@ -39,6 +39,25 @@ export async function createDeploymentManifest(directory, commit) {
   return { format: 1, commit, files };
 }
 
+export function resolveCommit(env = process.env, cwd = process.cwd()) {
+  const environmentCommit = env.VERCEL_GIT_COMMIT_SHA || env.GITHUB_SHA;
+  if (environmentCommit) {
+    if (!/^[a-f0-9]{40,64}$/i.test(environmentCommit)) {
+      throw new Error("Build environment supplied an invalid Git commit SHA");
+    }
+    return environmentCommit;
+  }
+
+  try {
+    return execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd,
+      encoding: "utf8",
+    }).trim();
+  } catch {
+    throw new Error("Could not determine build commit; set VERCEL_GIT_COMMIT_SHA or GITHUB_SHA outside a Git checkout");
+  }
+}
+
 function validateManifest(manifest, url) {
   if (
     manifest?.format !== 1 ||
@@ -99,11 +118,7 @@ async function main() {
   const [command, ...args] = process.argv.slice(2);
   if (command === "write" && args.length === 1) {
     const directory = resolve(args[0]);
-    const commit = execFileSync("git", ["rev-parse", "HEAD"], {
-      cwd: dirname(directory),
-      encoding: "utf8",
-    }).trim();
-    if (!/^[a-f0-9]{40,64}$/i.test(commit)) throw new Error("Could not determine checked-out Git commit");
+    const commit = resolveCommit(process.env, dirname(directory));
     const manifest = await createDeploymentManifest(directory, commit);
     await writeFile(resolve(directory, "deployment.json"), `${JSON.stringify(manifest)}\n`);
     console.log(`Wrote deployment manifest for ${commit} (${Object.keys(manifest.files).length} files)`);

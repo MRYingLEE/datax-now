@@ -3247,19 +3247,13 @@ manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
 
 # Validate manifest against the vendored runtime package schema
 schema_path = Path('vendor/schemas/runtime-package-manifest.v1.json')
-if schema_path.exists():
-  try:
-    import jsonschema
-    schema = json.loads(schema_path.read_text())
-    jsonschema.validate(instance=manifest, schema=schema)
-    print(f'  ✓ Manifest validated against {schema_path}')
-  except ImportError:
-    print('  ⚠ jsonschema not installed — skipping manifest validation')
-  except jsonschema.ValidationError as e:
-    print(f'  ✗ Manifest validation failed: {e.message}')
-    raise
-else:
-  print(f'  ⚠ Schema not found at {schema_path} — skipping manifest validation')
+if not schema_path.exists():
+  raise SystemExit(f'Required manifest schema not found at {schema_path}')
+
+import jsonschema
+schema = json.loads(schema_path.read_text())
+jsonschema.validate(instance=manifest, schema=schema)
+print(f'  ✓ Manifest validated against {schema_path}')
 
 LOCAL_MARKER = '/built-in-conda'
 

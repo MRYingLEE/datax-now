@@ -139,9 +139,13 @@ download_source() {
     return
   fi
 
-  # Prefer the current CRAN path, then fall back to the archive.  This keeps
-  # the build reproducible after a pinned release moves out of contrib.
-  for url in "$current_url" "$archive_url"; do
+  local urls=("$current_url" "$archive_url")
+  if [ "$source_location" = "archive" ]; then
+    urls=("$archive_url" "$current_url")
+  fi
+
+  # Try the configured source first, with the other CRAN location as fallback.
+  for url in "${urls[@]}"; do
     temporary="$(mktemp "$SOURCE_CACHE_DIR/.${filename}.XXXXXX")"
     if command -v curl >/dev/null 2>&1; then
       if ! curl -fsSL --retry 3 --retry-delay 2 "$url" -o "$temporary"; then

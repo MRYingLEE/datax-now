@@ -147,6 +147,11 @@ The `.vercelignore` file excludes local environments and generated output while
 keeping the wheel, conda, runtime-wheel, and notebook inputs available to the
 build.
 
+Manifest generation uses Vercel's `VERCEL_GIT_COMMIT_SHA` because Vercel build
+containers do not include the repository's `.git` directory. In Vercel project
+settings, enable **Environment Variables > Enable access to System Environment
+Variables** so the release manifest records the actual Git commit.
+
 The Vercel project `datax-now-readthedocs` uses staged production deployments:
 automatic custom-domain assignment is disabled (`autoAssignCustomDomains: false`).
 Builds from the production branch are available at deployment-specific URLs for

@@ -37,6 +37,7 @@ dependencies:
   - python-libarchive-c
   - zstandard  
   - pip:
+    - jsonschema
     # Use the PyPI wheel: the current conda package metadata is 0.8.3 but
     # still contains the JupyterLite 0.7.6 application archive.
     - jupyterlite-core==0.8.3

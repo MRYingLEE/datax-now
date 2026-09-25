@@ -4,9 +4,21 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { createDeploymentManifest, verifyDeployments } from "./deployment-manifest.mjs";
+import { createDeploymentManifest, resolveCommit, verifyDeployments } from "./deployment-manifest.mjs";
 
 const commit = "a".repeat(40);
+
+test("uses the Vercel commit SHA when building without a Git checkout", async t => {
+  const directory = await mkdtemp(join(tmpdir(), "deployment-no-git-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+
+  assert.equal(resolveCommit({ VERCEL_GIT_COMMIT_SHA: commit }, directory), commit);
+});
+
+test("uses GitHub's commit SHA and rejects malformed build metadata", async () => {
+  assert.equal(resolveCommit({ GITHUB_SHA: commit }), commit);
+  assert.throws(() => resolveCommit({ VERCEL_GIT_COMMIT_SHA: "not-a-commit" }), /invalid Git commit SHA/);
+});
 
 test("manifest hashes deployment files and excludes generated metadata/archive", async t => {
   const directory = await mkdtemp(join(tmpdir(), "deployment-manifest-"));
