@@ -44,10 +44,15 @@ Docs, Vercel, and Cloudflare deployments provide them.
 
 ### Browser caching
 
-Service-worker caching is enabled in `jupyter-lite.json`. The build patches the
-worker to retain that setting across worker restarts, use its versioned cache,
-and send cached ETags when refreshing same-origin assets. Unchanged runtime
-files are reused locally while changed files are fetched in the background.
+Service-worker caching is enabled in `jupyter-lite.json`. After all runtime
+patches, the build fingerprints every file under `dist/xeus/` with SHA-256 and
+embeds the manifest in the service worker. Runtime files use content-addressed
+Cache Storage keys: unchanged files are served locally without background
+downloads or revalidation, and changed files are fetched on their next request.
+Simultaneous kernel requests share a download. Existing runtime URLs stay stable;
+fingerprints are local cache keys, not renamed server files. Other assets retain
+background ETag revalidation. URL alias rewrites preserve these validators and
+accept `304` responses without retrying.
 The Cloudflare Worker also handles conditional requests with body-free `304`
 responses. Stable runtime URLs are not marked immutable.
 

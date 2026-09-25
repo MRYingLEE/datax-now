@@ -2640,9 +2640,10 @@ patch_parts = [
     '}',
     'var candidate=new URL(baseUrl.href);',
     'candidate.pathname=baseUrl.pathname+_safeTryExts[idx];',
-    'return _origFetch(candidate.href,init).then(',
+    'var redirected=input instanceof Request?new Request(candidate.href,input):candidate.href;',
+    'return _origFetch(redirected,init).then(',
       'function(resp){',
-        'if(resp.ok){_workingIdx=idx;return resp;}',
+        'if(resp.ok||resp.status===304){_workingIdx=idx;return resp;}',
         # Non-2xx (e.g. 403 gateway block) → try next alias
         'return _tryFetch(baseUrl,idx+1,input,init);',
       '},',
@@ -2715,7 +2716,7 @@ patch = (
     'else if(input instanceof URL)url=input.href;'
     'else if(input&&input.url)url=input.url;'
     'var fallback=url?_condaTarballFallback(url):null;'
-    'if(fallback){return _origFetchConda(fallback,init)}'
+    'if(fallback){return _origFetchConda(input instanceof Request?new Request(fallback,input):fallback,init)}'
     'return _origFetchConda(input,init);'
   '};'
   'self._condaTarballFallback=true;'
@@ -3516,6 +3517,8 @@ if [ "$VERIFY_FAIL" -ne 0 ]; then
   echo "  Re-run ./build.sh to restore the canonical patched state."
   exit 1
 fi
+
+node "$REPO_ROOT/scripts/fingerprint-runtime.cjs" dist
 
   # Include the local CORS server and package the complete deployment for static
   # hosts that publish the dist/ directory directly.
