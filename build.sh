@@ -3538,6 +3538,7 @@ node "$REPO_ROOT/scripts/fingerprint-runtime.cjs" dist
   # Include the local CORS server and package the complete deployment for static
   # hosts that publish the dist/ directory directly.
   cp "$REPO_ROOT/cors_server.py" "dist/cors_server.py"
+node "$REPO_ROOT/scripts/deployment-manifest.mjs" write "$REPO_ROOT/dist"
 python3 <<'EOFPACKAGE'
 from pathlib import Path
 import tempfile

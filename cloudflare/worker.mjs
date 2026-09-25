@@ -16,6 +16,8 @@ export default {
       return new Response(null, { status: 400 });
     }
     if (!key || key.endsWith("/")) key += "index.html";
+    const prefix = (env.ASSET_PREFIX ?? "").replace(/^\/+|\/+$/g, "");
+    if (prefix) key = `${prefix}/${key}`;
 
     const validator = request.headers.get("If-None-Match");
     let object = request.method === "HEAD" || validator

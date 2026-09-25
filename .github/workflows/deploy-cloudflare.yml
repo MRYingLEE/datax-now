@@ -2,19 +2,44 @@ name: Deploy JupyterLite to Cloudflare
 
 on:
   workflow_dispatch:
+    inputs:
+      release_ref:
+        description: Git ref to publish (use the same ref for each mirror)
+        required: true
+        default: master
+        type: string
 
 permissions:
   contents: read
 
+concurrency:
+  group: cloudflare-production
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: cloudflare-production
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.release_ref }}
 
       - name: Build JupyterLite deployment
         run: bash ./build.sh -c
+
+      - name: Verify release manifest
+        run: |
+          set -euo pipefail
+          test -s dist/deployment.json
+          release_commit="$(jq -er '.commit' dist/deployment.json)"
+          checked_out_commit="$(git rev-parse HEAD)"
+          test "$release_commit" = "$checked_out_commit"
+          release_id="$(sha256sum dist/datax-now.zip | cut -d ' ' -f 1)"
+          echo "RELEASE_COMMIT=$release_commit" >> "$GITHUB_ENV"
+          echo "RELEASE_ID=$release_id" >> "$GITHUB_ENV"
 
       - name: Set up Python for the R2 upload client
         uses: actions/setup-python@v6
@@ -31,11 +56,24 @@ jobs:
           AWS_DEFAULT_REGION: auto
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          aws s3 sync dist/ s3://datax-now/ --delete \
+          aws s3 sync dist/ "s3://datax-now/releases/${RELEASE_ID}/" --delete \
             --endpoint-url "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
 
       - name: Deploy R2-backed Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx --yes wrangler@4.139.0 deploy --config cloudflare/wrangler.toml
+        run: npx --yes wrangler@4.139.0 deploy --config cloudflare/wrangler.toml --var "ASSET_PREFIX:releases/${RELEASE_ID}"
+
+      - name: Verify live Worker release
+        run: |
+          set -euo pipefail
+          deployed_commit="$(curl --fail --silent --show-error https://datax-now.helloway.workers.dev/deployment.json | jq -er '.commit')"
+          test "$deployed_commit" = "$RELEASE_COMMIT"
+          {
+            echo "## Cloudflare deployment"
+            echo
+            echo "- Release: ${deployed_commit}"
+            echo "- Release assets: releases/${RELEASE_ID}/"
+            echo "- Site: https://datax-now.helloway.workers.dev/"
+          } >> "$GITHUB_STEP_SUMMARY"

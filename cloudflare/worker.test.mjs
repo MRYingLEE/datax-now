@@ -65,6 +65,18 @@ test("serves index files with isolation headers and metadata", async () => {
   assert.equal(await head.text(), "");
 });
 
+test("serves assets from the configured immutable release prefix", async () => {
+  const keys = [];
+  const env = {
+    ASSET_PREFIX: "/releases/build-123/",
+    ASSETS: { async get(key) { keys.push(key); return asset; } },
+  };
+
+  const response = await worker.fetch(new Request("https://example.com/lab/"), env);
+  assert.deepEqual(keys, ["releases/build-123/lab/index.html"]);
+  assert.equal(response.status, 200);
+});
+
 test("serves byte ranges", async () => {
   const env = { ASSETS: { async get(key, options) {
     assert.equal(key, "datax-now.zip");

@@ -42,6 +42,27 @@ The static result is written to `dist/`. A local server must provide the
 cross-origin isolation headers required by the WebAssembly runtime; Read the
 Docs, Vercel, and Cloudflare deployments provide them.
 
+Each build writes `dist/deployment.json` with its checked-out Git commit and a
+SHA-256 inventory of the static assets. Compare the active Vercel and Cloudflare
+mirrors with:
+
+```bash
+node scripts/deployment-manifest.mjs verify - \
+  https://datax.now/ \
+  https://datax-now.helloway.workers.dev/
+```
+
+To include Read the Docs, add its static-assets base URL ending in
+`/_static/`. The verifier reports a mismatch if mirrors differ by commit or
+asset bytes. `deployment.json` itself and the generated ZIP are excluded from
+the inventory to avoid a self-referential archive hash.
+
+The launch page links the existing RTD, Vercel, and Cloudflare deployments as
+separate choices, not as an automatic redirect or cross-origin load balancer.
+Select one origin for each session: browser storage and notebook files do not
+move when switching hosts. GitHub Pages remains an archive mirror because it
+cannot supply the isolation headers required by the kernel.
+
 ### Browser caching
 
 Service-worker caching is enabled in `jupyter-lite.json`. After all runtime
@@ -75,7 +96,7 @@ kernel initialization failure.
 Run the focused regression checks with:
 
 ```bash
-node --test scripts/service-worker-cache.test.mjs cloudflare/worker.test.mjs
+node --test scripts/service-worker-cache.test.mjs cloudflare/worker.test.mjs scripts/deployment-manifest.test.mjs
 ```
 
 After rebuilding and deploying, allow one initial load to populate the cache.
@@ -149,7 +170,7 @@ either production domain to test an unpromoted deployment.
 
 The `.github/workflows/deploy-github-pages.yml` workflow builds and publishes
 the complete `dist/` directory to GitHub Pages when `master` changes. It can
-also be started manually with **Run workflow**. In the repository settings,
+also be started manually with **Run workflow** and a `release_ref`. In the repository settings,
 set **Pages > Build and deployment > Source** to **GitHub Actions**.
 
 The workflow also places a ZIP of the complete deployment at the site root:
@@ -171,7 +192,14 @@ Cloudflare Pages cannot host the complete build: `dist/datax-now.zip` and some
 WebAssembly runtime files exceed its 25 MiB per-asset limit. Instead, the
 `deploy-cloudflare.yml` workflow uploads `dist/` to an R2 bucket and deploys a
 Worker that serves it at the same paths, including `/datax-now.zip`. The Worker
-adds the COOP/COEP headers required by the browser runtime.
+adds the COOP/COEP headers required by the browser runtime. The manual workflow
+accepts a `release_ref`, serializes production deployments, and verifies the
+live Worker serves the built commit. Configure required reviewers for the
+`cloudflare-production` GitHub Actions environment if production deployments
+should require an approval. Each deployment uploads to an immutable
+deployment-archive-hash prefix in R2 and switches the Worker only after the
+upload succeeds. Prior release prefixes remain available for rollback and
+continue to use storage until explicitly removed.
 
 1. Create an R2 bucket named `datax-now` in your Cloudflare account.
 2. Create an R2 API token with object read/write access to that bucket. Store
@@ -180,15 +208,18 @@ adds the COOP/COEP headers required by the browser runtime.
 3. Create a Cloudflare API token with Workers Scripts edit and R2 bucket read
   permissions. Store it as `CLOUDFLARE_API_TOKEN`, and store the account ID as
   `CLOUDFLARE_ACCOUNT_ID`.
-4. Run **Deploy JupyterLite to Cloudflare** from **Actions > Run workflow**.
-  Open the deployed Worker URL reported by Wrangler (or attach a domain to the
-  Worker in Cloudflare) and check `/lab/` and `/datax-now.zip`.
+4. Run **Deploy JupyterLite to Cloudflare** from **Actions > Run workflow**,
+  selecting the same `release_ref` used for other mirrors when aligning a
+  release. Open the deployed Worker URL reported by Wrangler (or attach a
+  domain to the Worker in Cloudflare) and check `/lab/` and `/datax-now.zip`.
 
 Deployment is manual so an unreviewed build cannot replace the live Worker.
 The R2 bucket is not public: the Worker reads it through its bucket binding.
-Uploads synchronize and remove files no longer present in `dist/`; do not use
-the bucket for other content. Cloudflare R2 storage, operations, and Worker
-requests may incur charges.
+Each upload synchronizes only its release prefix and removes stale files from
+that prefix; do not use the bucket for other content. Cloudflare R2 storage,
+operations, and Worker requests may incur charges.
+The first prefix-based deployment leaves the previous root-level objects
+untouched; remove those separately only after verifying the new Worker release.
 
 The live Worker is available at https://datax-now.helloway.workers.dev/.
 
