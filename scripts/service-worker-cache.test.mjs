@@ -18,6 +18,76 @@ async function fromCache(request){return (await openCache()).match(request)}
 async function updateCache(request,response){return (await openCache()).put(request,response)}
 async function refetch(e){let a=await fetch(e);return await updateCache(e,a),a}`;
 
+test("runtime cache rejects mismatched bytes and retries without poisoning the hash", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "datax-integrity-"));
+  const stored = new Map();
+  const tasks = [];
+  let body = "previous deployment";
+  let downloads = 0;
+  try {
+    mkdirSync(join(directory, "xeus"));
+    writeFileSync(join(directory, "xeus/runtime.wasm"), "current deployment");
+    writeFileSync(join(directory, "service-worker.js"), "");
+    fingerprints.fingerprintRuntime(directory);
+    const context = vm.createContext({
+      URL, Request, Response, btoa,
+      self: { location: { href: "https://example.com/service-worker.js?enableCache=true" } },
+      caches: { async open() { return {
+        async match(key) { return stored.get(key)?.clone(); },
+        async put(key, response) { stored.set(key, response.clone()); },
+        async keys() { return [...stored.keys()].map(key => new Request(key)); },
+        async delete(request) { return stored.delete(request.url); },
+      }; } },
+      async maybeFromCache() { throw new Error("Unexpected fallback"); },
+      async fetch(request) {
+        downloads++;
+        assert.equal(request.cache, "no-cache");
+        return fetch(`data:application/octet-stream,${encodeURIComponent(body)}`, {
+          integrity: request.integrity,
+        });
+      },
+    });
+    vm.runInContext(readFileSync(join(directory, "service-worker.js"), "utf8"), context);
+    const event = {
+      request: new Request("https://example.com/xeus/runtime.wasm"),
+      waitUntil(task) { tasks.push(task); },
+    };
+    await assert.rejects(context.maybeFromCache(event), /fetch failed/);
+    await Promise.all(tasks);
+    assert.equal(stored.size, 0);
+    body = "current deployment";
+    assert.equal(await (await context.maybeFromCache(event)).text(), body);
+    await Promise.all(tasks);
+    assert.equal(stored.size, 1);
+    assert.equal(await (await context.maybeFromCache(event)).text(), body);
+    assert.equal(downloads, 2);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("range requests bypass both runtime and upstream caches", async () => {
+  const context = vm.createContext({
+    URL, Request, Response,
+    self: { location: { href: "https://example.com/service-worker.js?enableCache=true" } },
+    caches: { async open() { throw new Error("Unexpected cache access"); } },
+    async maybeFromCache() { return new Response("full cached body"); },
+    async fetch(request) {
+      assert.equal(request.headers.get("Range"), "bytes=0-3");
+      return new Response("part", { status: 206 });
+    },
+  });
+  vm.runInContext(`(${fingerprints.installRuntimeCache.toString()})({});`, context);
+  const response = await context.maybeFromCache({
+    request: new Request("https://example.com/xeus/runtime.wasm", {
+      headers: { Range: "bytes=0-3" },
+    }),
+    waitUntil() { throw new Error("Unexpected cache update"); },
+  });
+  assert.equal(response.status, 206);
+  assert.equal(await response.text(), "part");
+});
+
 test("fingerprints reuse runtime bodies after restart and invalidate binary-only changes", async () => {
   const directory = mkdtempSync(join(tmpdir(), "datax-fingerprints-"));
   const stored = new Map();
@@ -31,12 +101,16 @@ test("fingerprints reuse runtime bodies after restart and invalidate binary-only
   };
   function startWorker() {
     const context = vm.createContext({
-      URL, Request, Response,
+      URL, Request, Response, btoa,
       enableCache: false,
       self: { location: { href: "https://example.com/_static/service-worker.js?enableCache=true" } },
       caches: { async open() { return cache; } },
       async maybeFromCache() { fallbackCalls++; return new Response("fallback"); },
-      async fetch() { downloads++; return new Response("runtime body"); },
+      async fetch(request) {
+        if (request.headers.has("Range")) return new Response("part", { status: 206 });
+        downloads++;
+        return new Response("runtime body");
+      },
     });
     vm.runInContext(readFileSync(join(directory, "service-worker.js"), "utf8"), context);
     return context;
@@ -63,9 +137,9 @@ test("fingerprints reuse runtime bodies after restart and invalidate binary-only
     assert.equal(downloads, 1, "parallel kernels must share the first download");
     assert.equal(await load(startWorker()), "runtime body");
     assert.equal(downloads, 1, "reload must transfer no runtime body");
-    assert.equal(await load(worker, "xeus/runtime.wasm", { headers: { Range: "bytes=0-3" } }), "fallback");
+    assert.equal(await load(worker, "xeus/runtime.wasm", { headers: { Range: "bytes=0-3" } }), "part");
     assert.equal(await load(worker, "jupyter-lite.json"), "fallback");
-    assert.equal(fallbackCalls, 2);
+    assert.equal(fallbackCalls, 1);
     writeFileSync(join(directory, "xeus/runtime.wasm"), "binary-v2");
     const second = fingerprints.fingerprintRuntime(directory);
     assert.notEqual(first["xeus/runtime.wasm"], second["xeus/runtime.wasm"]);
@@ -114,12 +188,16 @@ test("runtime URL rewrites preserve validators and accept 304 without retrying",
       const response = await context.fetch(new Request(`https://example.com${source}`, {
         headers: { "If-None-Match": '"runtime-v1"', Range: "bytes=0-9" },
         credentials: "include",
+        integrity: "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        cache: "no-cache",
       }));
       assert.equal(requests.length, 1, "304 must not trigger alias retries");
       assert.equal(new URL(requests[0].url).pathname, target);
       assert.equal(requests[0].headers.get("If-None-Match"), '"runtime-v1"');
       assert.equal(requests[0].headers.get("Range"), "bytes=0-9");
       assert.equal(requests[0].credentials, "include");
+      assert.equal(requests[0].integrity, "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
+      assert.equal(requests[0].cache, "no-cache");
       assert.equal(response.status, 304);
     }
   } finally {

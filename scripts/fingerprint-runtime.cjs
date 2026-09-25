@@ -6,7 +6,7 @@ function installRuntimeCache(hashes) {
   const original = maybeFromCache;
   const scope = new URL('./', self.location.href);
   const enabled = new URL(self.location.href).searchParams.get('enableCache') === 'true';
-  const cacheName = 'datax-runtime-sha256-v1';
+  const cacheName = 'datax-runtime-sha256-v2';
   const pending = new Map();
   maybeFromCache = async function(event) {
     const request = event.request;
@@ -14,22 +14,25 @@ function installRuntimeCache(hashes) {
     const relative = url.pathname.slice(scope.pathname.length);
     const hash = url.origin === scope.origin && url.pathname.startsWith(scope.pathname)
       ? hashes[relative] : null;
-    if (!hash || request.method !== 'GET' || request.headers.has('Range') || !enabled) {
+    if (request.headers.has('Range')) return fetch(request);
+    if (!hash || request.method !== 'GET' || !enabled) {
       return original(event);
     }
     const key = new URL(relative, scope);
     key.searchParams.set('sha256', hash);
+    const integrity = 'sha256-' + btoa(String.fromCharCode(...hash.match(/../g).map(byte => parseInt(byte, 16))));
+    const verifiedRequest = new Request(request, { integrity, cache: 'no-cache' });
     let cache;
     try {
       cache = await caches.open(cacheName);
       const cached = await cache.match(key.href);
       if (cached) return cached;
     } catch {
-      return fetch(request);
+      return fetch(verifiedRequest);
     }
     if (!pending.has(key.href)) {
       const download = (async () => {
-        const response = await fetch(request);
+        const response = await fetch(verifiedRequest);
         if (response.ok && response.status !== 206) {
           try {
             await cache.put(key.href, response.clone());

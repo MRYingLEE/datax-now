@@ -53,6 +53,12 @@ Simultaneous kernel requests share a download. Existing runtime URLs stay stable
 fingerprints are local cache keys, not renamed server files. Other assets retain
 background ETag revalidation. URL alias rewrites preserve these validators and
 accept `304` responses without retrying.
+Runtime cache misses revalidate the HTTP cache and require fetch integrity to
+match the build's SHA-256 digest before returning or storing a response. A
+deployment mismatch fails the download and can be retried; it is not cached
+under the expected hash. Previously unverified runtime cache entries are not
+reused, so this upgrade requires an initial runtime download. Byte-range requests
+bypass service-worker caches and retain the server's partial-response behavior.
 The Cloudflare Worker also handles conditional requests with body-free `304`
 responses. Stable runtime URLs are not marked immutable.
 
