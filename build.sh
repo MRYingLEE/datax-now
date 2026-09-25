@@ -2760,6 +2760,15 @@ digest = hasher.hexdigest()[:12]
 cache_name = f"precache-{digest}"
 
 updated = re.sub(r'const CACHE="precache(?:-[0-9a-f]+)?"', f'const CACHE="{cache_name}"', content, count=1)
+if 'origin!==location.origin)return;' not in updated:
+  updated, fetch_count = re.subn(
+    r'((?:async )?function onFetch\((\w+)\)\s*\{)',
+    lambda match: f'{match.group(1)}if(new URL({match.group(2)}.request.url).origin!==location.origin)return;',
+    updated,
+    count=1,
+  )
+  if fetch_count != 1:
+    raise SystemExit("Service worker fetch handler no longer matches the generated worker")
 updated = re.sub(
   r'function onActivate\(e\)\{(?:const t=new URL\(location\.href\)\.searchParams;enableCache="true"===t\.get\("enableCache"\)|enableCache="true"===new URL\(location\.href\)\.searchParams\.get\("enableCache"\)),e\.waitUntil\(self\.clients\.claim\(\)\)\}',
   'function onActivate(e){e.waitUntil((async()=>{const names=await caches.keys();await Promise.all(names.filter(name=>name.startsWith("precache")&&name!==CACHE).map(name=>caches.delete(name)));await self.clients.claim()})())}',
@@ -2768,6 +2777,12 @@ updated = re.sub(
 )
 updated = updated.replace('let enableCache=!1', 'let enableCache="true"===new URL(location.href).searchParams.get("enableCache")')
 updated = updated.replace('caches.open("precache")', 'caches.open(CACHE)')
+updated = updated.replace('t&&404!==t.status?t:null', 't&&t.ok?t:null', 1)
+updated = updated.replace(
+  'e.waitUntil(updateCache(a,t.clone()))',
+  't.ok&&e.waitUntil(updateCache(a,t.clone()))',
+  1,
+)
 updated = updated.replace(
   'async function refetch(e){let a=await fetch(e);return await updateCache(e,a),a}',
   'async function refetch(request){'
@@ -2781,9 +2796,12 @@ updated = updated.replace(
   'return response;}'
 )
 required = [
+  'origin!==location.origin)return;',
   'let enableCache="true"===new URL(location.href).searchParams.get("enableCache")',
   'caches.open(CACHE)',
   'caches.keys()',
+  't&&t.ok?t:null',
+  't.ok&&e.waitUntil(updateCache(a,t.clone()))',
   'headers.set("If-None-Match",etag)',
 ]
 if not all(marker in updated for marker in required):

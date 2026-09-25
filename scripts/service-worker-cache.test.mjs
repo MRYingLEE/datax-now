@@ -13,8 +13,10 @@ const patch = build.split('echo "Patching service worker cache version..."')[1]
   .split("python3 << 'EOFPATCH'\n")[1].split("\nEOFPATCH")[0];
 const upstream = `const CACHE="precache";let enableCache=!1;
 function onActivate(e){enableCache="true"===new URL(location.href).searchParams.get("enableCache"),e.waitUntil(self.clients.claim())}
+async function onFetch(event){event.respondWith(maybeFromCache(event))}
+async function maybeFromCache(e){let{request:a}=e;if(!enableCache)return await fetch(a);let t=await fromCache(a);return t?e.waitUntil(refetch(a)):(t=await fetch(a),e.waitUntil(updateCache(a,t.clone()))),t}
 async function openCache(){return await caches.open("precache")}
-async function fromCache(request){return (await openCache()).match(request)}
+async function fromCache(e){let a=await openCache(),t=await a.match(e);return t&&404!==t.status?t:null}
 async function updateCache(request,response){return (await openCache()).put(request,response)}
 async function refetch(e){let a=await fetch(e);return await updateCache(e,a),a}`;
 
@@ -86,6 +88,81 @@ test("range requests bypass both runtime and upstream caches", async () => {
   });
   assert.equal(response.status, 206);
   assert.equal(await response.text(), "part");
+});
+
+test("cross-origin fonts bypass service-worker caching", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "datax-external-"));
+  try {
+    mkdirSync(join(directory, "dist/xeus/xeus-python-wasm-host"), { recursive: true });
+    writeFileSync(join(directory, "dist/xeus/xeus-python-wasm-host/xpython.js"), "runtime");
+    writeFileSync(join(directory, "dist/service-worker.js"), upstream);
+    const result = spawnSync("python3", ["-c", patch], { cwd: directory, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    const second = spawnSync("python3", ["-c", patch], { cwd: directory, encoding: "utf8" });
+    assert.equal(second.status, 0, second.stderr);
+    assert.equal(readFileSync(join(directory, "dist/service-worker.js"), "utf8").split("origin!==location.origin)return;").length, 2);
+    const context = vm.createContext({
+      URL, Request, Response, Headers,
+      location: { href: "https://example.com/service-worker.js?enableCache=true", origin: "https://example.com" },
+      self: { clients: { async claim() {} } },
+      caches: { async open() { throw new Error("Cross-origin cache access"); } },
+      async fetch() { return new Response("font"); },
+    });
+    vm.runInContext(readFileSync(join(directory, "dist/service-worker.js"), "utf8"), context);
+    let intercepted = false;
+    context.onFetch({
+      request: new Request("https://fonts.googleapis.com/css2?family=Geist"),
+      respondWith() { intercepted = true; },
+    });
+    assert.equal(intercepted, false, "external requests should use the browser network path");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("service worker does not cache rate-limited manifest responses", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "datax-manifest-"));
+  try {
+    mkdirSync(join(directory, "dist/xeus/xeus-python-wasm-host"), { recursive: true });
+    writeFileSync(join(directory, "dist/xeus/xeus-python-wasm-host/xpython.js"), "runtime");
+    writeFileSync(join(directory, "dist/service-worker.js"), upstream);
+    const result = spawnSync("python3", ["-c", patch], { cwd: directory, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    let writes = 0;
+    const context = vm.createContext({
+      URL, Request, Response, Headers,
+      enableCache: true,
+      location: { href: "https://example.com/service-worker.js?enableCache=true", origin: "https://example.com" },
+      self: { clients: { async claim() {} } },
+      caches: { async open() { return {
+        async match() { return null; },
+        async put() { writes++; },
+      }; } },
+      async fetch() { return new Response("Too Many Requests", { status: 429 }); },
+    });
+    vm.runInContext(readFileSync(join(directory, "dist/service-worker.js"), "utf8"), context);
+    const tasks = [];
+    const response = await context.maybeFromCache({
+      request: new Request("https://example.com/manifest.webmanifest"),
+      waitUntil(task) { tasks.push(task); },
+    });
+    await Promise.all(tasks);
+    assert.equal(response.status, 429);
+    assert.equal(writes, 0, "host rate limits must never become cached manifest responses");
+    let downloads = 0;
+    context.caches.open = async () => ({
+      async match() { return new Response("old rate limit", { status: 429 }); },
+      async put() { writes++; },
+    });
+    context.fetch = async () => { downloads++; return new Response("manifest", { status: 200 }); };
+    assert.equal(await (await context.maybeFromCache({
+      request: new Request("https://example.com/manifest.webmanifest"),
+      waitUntil(task) { tasks.push(task); },
+    })).text(), "manifest");
+    assert.equal(downloads, 1, "previously cached rate limits must be ignored");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("fingerprints reuse runtime bodies after restart and invalidate binary-only changes", async () => {

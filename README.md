@@ -62,6 +62,16 @@ bypass service-worker caches and retain the server's partial-response behavior.
 The Cloudflare Worker also handles conditional requests with body-free `304`
 responses. Stable runtime URLs are not marked immutable.
 
+The service worker leaves cross-origin requests (including Google Fonts) to the
+browser and does not cache unsuccessful same-origin responses, such as a host's
+`429` for the web manifest. A cached asset can still be served while background
+revalidation fails; the host must recover before uncached requests can succeed.
+
+`%%js` runs in a kernel worker, where browser window APIs such as `alert()` are
+not portable. The Quick Start example uses console output instead. A preload
+warning for a service-worker-controlled bundle does not by itself indicate a
+kernel initialization failure.
+
 Run the focused regression checks with:
 
 ```bash
@@ -120,6 +130,9 @@ The Vercel project `datax-now-readthedocs` uses staged production deployments:
 automatic custom-domain assignment is disabled (`autoAssignCustomDomains: false`).
 Builds from the production branch are available at deployment-specific URLs for
 review, while the production domain remains on the previously promoted build.
+If Deployment Protection is enabled, an unauthenticated manifest request on a
+staged URL redirects to Vercel SSO. Browsers report that cross-origin redirect
+as a manifest CORS error; sign in to the deployment before testing its assets.
 After checking a staged deployment, promote that exact deployment without a
 rebuild:
 
